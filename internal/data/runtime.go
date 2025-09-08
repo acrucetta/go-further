@@ -23,3 +23,33 @@ func (r Runtime) MarshalJSON() ([]byte, error) {
 	// Convert the quoted string value to a byte slice and return it.
 	return []byte(quotedJSONValue), nil
 }
+
+// Implement an UnmarshalJSON() method on the Runtime type so that it satisfies the
+// json.Unmarshaler interface. This will allow us to accept strings like "107 mins" or just numbers.
+func (r *Runtime) UnmarshalJSON(data []byte) error {
+	// Remove quotes if present
+	s, err := strconv.Unquote(string(data))
+	if err != nil {
+		// If unquoting fails, maybe it's a raw number, try to parse as int
+		var i int32
+		if _, err := fmt.Sscanf(string(data), "%d", &i); err == nil {
+			*r = Runtime(i)
+			return nil
+		}
+		return fmt.Errorf("invalid runtime format: %s", string(data))
+	}
+	// Try to parse the string in the format "<number> mins"
+	var i int32
+	n, err := fmt.Sscanf(s, "%d mins", &i)
+	if err == nil && n == 1 {
+		*r = Runtime(i)
+		return nil
+	}
+	// Try to parse as a plain number string
+	n, err = fmt.Sscanf(s, "%d", &i)
+	if err == nil && n == 1 {
+		*r = Runtime(i)
+		return nil
+	}
+	return fmt.Errorf("invalid runtime format: %s", s)
+}
