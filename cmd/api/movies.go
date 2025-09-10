@@ -78,42 +78,51 @@ func (app *application) showMovieHandler(w http.ResponseWriter, r *http.Request)
 
 func (app *application) listMovieHandler(w http.ResponseWriter, r *http.Request) {
 	var input struct {
-        Title    string
-        Genres   []string
-        Filters data.Filters
-    }
+		Title   string
+		Genres  []string
+		Filters data.Filters
+	}
 
-    // Initialize a new Validator instance.
-    v := validator.New()
+	// Initialize a new Validator instance.
+	v := validator.New()
 
-    // Call r.URL.Query() to get the url.Values map containing the query string data.
-    qs := r.URL.Query()
+	// Call r.URL.Query() to get the url.Values map containing the query string data.
+	qs := r.URL.Query()
 
-    // Use our helpers to extract the title and genres query string values, falling back
-    // to defaults of an empty string and an empty slice respectively if they are not
-    // provided by the client.
-    input.Title = app.readString(qs, "title", "")
-    input.Genres = app.readCSV(qs, "genres", []string{})
+	// Use our helpers to extract the title and genres query string values, falling back
+	// to defaults of an empty string and an empty slice respectively if they are not
+	// provided by the client.
+	input.Title = app.readString(qs, "title", "")
+	input.Genres = app.readCSV(qs, "genres", []string{})
 
-    // Get the page and page_size query string values as integers. Notice that we set
-    // the default page value to 1 and default page_size to 20, and that we pass the
-    // validator instance as the final argument here.
-    input.Filters.Page = app.readInt(qs, "page", 1, v)
-    input.Filters.PageSize = app.readInt(qs, "page_size", 20, v)
+	// Get the page and page_size query string values as integers. Notice that we set
+	// the default page value to 1 and default page_size to 20, and that we pass the
+	// validator instance as the final argument here.
+	input.Filters.Page = app.readInt(qs, "page", 1, v)
+	input.Filters.PageSize = app.readInt(qs, "page_size", 20, v)
+	input.Filters.SortSafelist = []string{"id", "title", "year", "runtime", "-id", "-title", "-year", "-runtime"}
 
-    // Extract the sort query string value, falling back to "id" if it is not provided
-    // by the client (which will imply an ascending sort on movie ID).
-    input.Filters.Sort = app.readString(qs, "sort", "id")
+	// Extract the sort query string value, falling back to "id" if it is not provided
+	// by the client (which will imply an ascending sort on movie ID).
+	input.Filters.Sort = app.readString(qs, "sort", "id")
 
-    // Check the Validator instance for any errors and use the failedValidationResponse()
-    // helper to send the client a response if necessary.
-    if !v.Valid() {
-        app.failedValidationResponse(w, r, v.Errors)
-        return
-    }
+	// Check the Validator instance for any errors and use the failedValidationResponse()
+	// helper to send the client a response if necessary.
+	if data.ValidateFilters(v, input.Filters); !v.Valid() {
+		app.failedValidationResponse(w, r, v.Errors)
+		return
+	}
 
-    // Dump the contents of the input struct in an HTTP response.
-    fmt.Fprintf(w, "%+v\n", input)
+	movies, err := app.models.Movies.GetAll(input.Title, input.Genres, input.Filters)
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+		return
+	}
+	// Write the updated movie record in a JSON response.
+	err = app.writeJSON(w, http.StatusOK, envelope{"movies": movies}, nil)
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+	}
 }
 
 func (app *application) updateMovieHandler(w http.ResponseWriter, r *http.Request) {
